@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   IonContent,
   IonHeader,
@@ -10,13 +10,26 @@ import {
   IonCardTitle,
   IonCardSubtitle,
   IonButton,
-  IonActionSheet
+  IonActionSheet,
+  IonRouterLink,
+  useIonViewWillEnter
 } from '@ionic/react';
 
-import './Tab1.css';
-
 const Tab1: React.FC = () => {
-  const [showActionSheet, setShowActionSheet] = React.useState(false);
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  const [nextEvent, setNextEvent] = useState<null | {
+    date: string;
+    time: string;
+    host: string;
+    location: string;
+  }>(null);
+
+  useIonViewWillEnter(() => {
+    const storedEvent = localStorage.getItem('nextGameEvent');
+    if (storedEvent) {
+      setNextEvent(JSON.parse(storedEvent));
+    }
+  });
 
   const actionSheetButtons = [
     {
@@ -38,14 +51,6 @@ const Tab1: React.FC = () => {
     }
   ];
 
-  // Beispiel-Daten für nächsten Termin
-  const nextEvent = {
-    date: 'Freitag, 26. April 2025',
-    time: '19:00 Uhr',
-    host: 'Lisa Müller',
-    location: 'Musterstraße 12, 12345 Beispielstadt'
-  };
-
   return (
     <IonPage>
       <IonHeader>
@@ -54,20 +59,30 @@ const Tab1: React.FC = () => {
         </IonToolbar>
       </IonHeader>
       <IonContent fullscreen className="ion-padding">
+        {nextEvent ? (
+          <IonCard>
+            <IonCardHeader>
+              <IonCardSubtitle>Nächster Termin</IonCardSubtitle>
+              <IonCardTitle>{nextEvent.date} – {nextEvent.time}</IonCardTitle>
+            </IonCardHeader>
+            <div className="ion-padding">
+              <p><strong>Gastgeber:</strong> {nextEvent.host}</p>
+              <p><strong>Adresse:</strong> {nextEvent.location}</p>
+              <IonButton expand="block" onClick={() => setShowActionSheet(true)}>
+                Ich komme zu spät
+              </IonButton>
+            </div>
+          </IonCard>
+        ) : (
+          <p className="ion-padding">Noch kein Spieltermin eingetragen.</p>
+        )}
 
-        <IonCard>
-          <IonCardHeader>
-            <IonCardSubtitle>Nächster Termin</IonCardSubtitle>
-            <IonCardTitle>{nextEvent.date} – {nextEvent.time}</IonCardTitle>
-          </IonCardHeader>
-          <div className="ion-padding">
-            <p><strong>Gastgeber:</strong> {nextEvent.host}</p>
-            <p><strong>Adresse:</strong> {nextEvent.location}</p>
-            <IonButton expand="block" onClick={() => setShowActionSheet(true)}>
-              Ich komme zu spät
-            </IonButton>
-          </div>
-        </IonCard>
+        <IonRouterLink routerLink="/tab2" routerDirection="forward">
+          <IonButton expand="block" color="medium">
+            Neuen Termin erstellen
+          </IonButton>
+        </IonRouterLink>
+
 
         <IonActionSheet
           isOpen={showActionSheet}
