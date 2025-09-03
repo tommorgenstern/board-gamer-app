@@ -276,6 +276,59 @@ export const deleteGroup = async (groupId: string): Promise<void> => {
   });
 };
 
+export const joinGroup = async (groupId: string, userId: string): Promise<void> => {
+  try {
+    const ref = `${COLLECTIONS.GROUPS}/${groupId}`;
+
+    // Gruppe laden
+    const res = await FirebaseFirestore.getDocument({ reference: ref });
+    const group = res.snapshot?.data as GroupDoc | undefined;
+    if (!group) {
+      throw new Error("Gruppe nicht gefunden.");
+    }
+
+    const existing = Array.isArray(group.memberIds) ? group.memberIds : [];
+    if (existing.includes(userId)) {
+      // Already member – nicht als Fehler behandeln, aber deutlich loggen
+      console.log("[joinGroup] User ist bereits Mitglied, nichts zu tun.");
+      return;
+    }
+
+    const updated = Array.from(new Set([...existing, userId]));
+
+    // Merge-Update nur memberIds
+    await FirebaseFirestore.setDocument({
+      reference: ref,
+      data: { memberIds: updated },
+      merge: true,
+    });
+
+    console.log("[joinGroup] Erfolgreich beigetreten:", { groupId, userId });
+  } catch (e) {
+    console.error("[joinGroup] Fehler:", e);
+    throw e;
+  }
+};
+
+export const leaveGroup = async (groupId: string, userId: string): Promise<void> => {
+  const result = await FirebaseFirestore.getDocument({
+    reference: `${COLLECTIONS.GROUPS}/${groupId}`,
+  });
+  const data = result.snapshot?.data as GroupDoc | undefined;
+  if (!data?.memberIds) throw new Error("Gruppe nicht gefunden.");
+
+  const next = (data.memberIds || []).filter((id) => id !== userId);
+  // nicht erlauben, wenn man der letzte Member wäre
+  if (next.length === 0) throw new Error("Du kannst nicht als letzter die Gruppe verlassen.");
+
+  await FirebaseFirestore.setDocument({
+    reference: `${COLLECTIONS.GROUPS}/${groupId}`,
+    data: { memberIds: next },
+    merge: true,
+  });
+};
+
+
 
 
 

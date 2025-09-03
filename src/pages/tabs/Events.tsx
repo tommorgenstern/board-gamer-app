@@ -109,6 +109,12 @@ const Events: React.FC = () => {
           };
         })
       );
+      
+      enrichedEvents.sort(
+  (a, b) =>
+    firestoreTimestampToDate(a.datetime).getTime() -
+    firestoreTimestampToDate(b.datetime).getTime()
+);
 
       setEvents(enrichedEvents);
     } catch (err) {

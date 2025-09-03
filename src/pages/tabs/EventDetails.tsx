@@ -100,6 +100,8 @@ const EventDetails: React.FC = () => {
     }
   };
 
+
+
   const handleSave = async () => {
     if (!event || !event.name || !event.datetime) return;
 
@@ -188,6 +190,25 @@ const handleSuggestSubmit = async (nameInput: string) => {
   const sortedSuggestions = [...(event.gameSuggestions || [])].sort(
     (a, b) => b.voterIds.length - a.voterIds.length
   );
+
+  const hasUserRated = !!(user && event.ratings?.[user.uid]);
+
+  const ratingsMap = event.ratings || {};
+const ratingList = Object.values(ratingsMap);
+const ratingCount = ratingList.length;
+
+const sums = ratingList.reduce(
+  (acc, r) => ({
+    host: acc.host + r.host,
+    food: acc.food + r.food,
+    general: acc.general + r.general,
+  }),
+  { host: 0, food: 0, general: 0 }
+);
+
+const avgHost = ratingCount ? (sums.host / ratingCount).toFixed(1) : "-";
+const avgFood = ratingCount ? (sums.food / ratingCount).toFixed(1) : "-";
+const avgGeneral = ratingCount ? (sums.general / ratingCount).toFixed(1) : "-";
 
   return (
     <IonPage>
@@ -429,12 +450,33 @@ const handleSuggestSubmit = async (nameInput: string) => {
               <RatingCategory label="Gastgeber" value={userRating.host} onChange={(val) => setUserRating((prev) => ({ ...prev, host: val }))} />
               <RatingCategory label="Essen & Snacks" value={userRating.food} onChange={(val) => setUserRating((prev) => ({ ...prev, food: val }))} />
               <RatingCategory label="Allgemein" value={userRating.general} onChange={(val) => setUserRating((prev) => ({ ...prev, general: val }))} />
-              <IonButton expand="block" onClick={handleRatingSubmit} disabled={isSubmittingRating}>
-                Bewertung abschicken
-              </IonButton>
+             <IonButton
+              expand="block"
+              onClick={handleRatingSubmit}
+              disabled={isSubmittingRating || hasUserRated}
+            >
+              {hasUserRated ? "Bewertung abgegeben" : "Bewertung abschicken"}
+            </IonButton>
             </IonCardContent>
           </IonCard>
+          
         )}
+
+{isPast && ratingCount > 0 && (
+  <IonCard>
+    <IonCardHeader>
+      <IonCardTitle>Durchschnittliche Bewertung</IonCardTitle>
+    </IonCardHeader>
+    <IonCardContent>
+      <p>Gastgeber: {avgHost} ★</p>
+      <p>Essen: {avgFood} ★</p>
+      <p>Allgemein: {avgGeneral} ★</p>
+      <p style={{ color: "var(--ion-color-medium)" }}>
+        (basierend auf {ratingCount} Bewertung{ratingCount === 1 ? "" : "en"})
+      </p>
+    </IonCardContent>
+  </IonCard>
+)}
 
 
       </IonContent>

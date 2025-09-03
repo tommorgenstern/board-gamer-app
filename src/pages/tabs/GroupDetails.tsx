@@ -7,8 +7,9 @@ import {
 import { calendar, people, pencil } from "ionicons/icons";
 
 import { useParams } from "react-router";
-import { getGroupById, updateGroup } from "@/services/groups";
-import { getGroupEvents } from "@/services/events";
+import { getGroupById, updateGroup, joinGroup, leaveGroup } from "@/services/groups";
+import { addUserToFutureEvents, getGroupEvents, removeUserFromFutureEvents } from "@/services/events";
+import { useAuth } from "@/hooks/useAuth";
 import { firestoreTimestampToDate } from "@/utils/timeFormatter";
 import { GroupDoc, GroupEventDoc } from "@/interfaces/firestore";
 import { getUserById } from "@/services/users";
@@ -32,7 +33,7 @@ interface MemberWithName {
 
 const GroupDetails: React.FC = () => {
   const { groupId } = useParams<RouteParams>();
-
+  const { user } = useAuth();
   const [group, setGroup] = useState<GroupWithId | null>(null);
   const [events, setEvents] = useState<EventWithId[]>([]);
   const [members, setMembers] = useState<MemberWithName[]>([]);
@@ -96,6 +97,41 @@ const GroupDetails: React.FC = () => {
     }
   };
 
+
+const handleJoinGroup = async () => {
+  if (!group || !user) return;
+  try {
+    await joinGroup(group.id, user.uid);          // Service: User zur Gruppe hinzufügen
+    await addUserToFutureEvents(group.id, user.uid); // Service: User auch in zukünftige Events eintragen
+    await loadGroup(); // Gruppe + Mitglieder neu laden
+    setToastMessage("Beitritt erfolgreich!");
+  } catch (err) {
+    console.error("Fehler beim Beitreten:", err);
+    setToastMessage("Beitritt fehlgeschlagen.");
+  } finally {
+    setShowToast(true);
+  }
+};
+
+const handleLeaveGroup = async () => {
+  if (!user || !group) return;
+  try {
+    await leaveGroup(group.id, user.uid);
+    await removeUserFromFutureEvents(group.id, user.uid);
+    setToastMessage("Du hast die Gruppe verlassen.");
+    setShowToast(true);
+    await loadGroup(); // Ansicht aktualisieren
+  } catch (err: any) {
+    console.error("[leaveGroup] Fehler:", err);
+    setToastMessage(err?.message || "Austritt fehlgeschlagen");
+    setShowToast(true);
+  }
+};
+
+
+const isMember = !!(group && user && group.memberIds?.includes(user.uid));
+
+
   return (
     <IonPage>
       <IonHeader>
@@ -109,19 +145,35 @@ const GroupDetails: React.FC = () => {
           <IonLoading isOpen={loading} message="Lade Daten..." />
         ) : group ? (
           <>
-            <IonCard>
-              <IonCardHeader>
-                <IonCardTitle>{group.name}</IonCardTitle>
-              </IonCardHeader>
-              <IonCardContent>
-                <p><IonIcon icon={people} /> Mitglieder: {group.memberIds.length}</p>
-                <p><IonIcon icon={calendar} /> Erstellt am: {firestoreTimestampToDate(group.createdAt).toLocaleDateString("de-DE")}</p>
-                <IonButton fill="outline" onClick={() => setShowEditModal(true)}>
-                  <IonIcon icon={pencil} slot="start" />
-                  Gruppe bearbeiten
-                </IonButton>
-              </IonCardContent>
-            </IonCard>
+        <IonCard>
+          <IonCardHeader>
+            <IonCardTitle>{group.name}</IonCardTitle>
+          </IonCardHeader>
+          <IonCardContent>
+            <p><IonIcon icon={people} /> Mitglieder: {group.memberIds?.length}</p>
+            <p><IonIcon icon={calendar} /> Erstellt am: {firestoreTimestampToDate(group.createdAt).toLocaleDateString("de-DE")}</p>
+
+            {/* Wenn User noch kein Mitglied ist: Beitritts-Button */}
+            {!isMember && user && (
+              <IonButton expand="block" onClick={handleJoinGroup}>
+                Gruppe beitreten
+              </IonButton>
+            )}
+
+            {group && user && group.memberIds?.includes(user.uid) && (
+              <IonButton color="danger" fill="outline" onClick={handleLeaveGroup} style={{ marginTop: 8 }}>
+                Gruppe verlassen
+              </IonButton>
+            )}
+
+
+            <IonButton fill="outline" onClick={() => setShowEditModal(true)} style={{ marginLeft: 8 }}>
+              <IonIcon icon={pencil} slot="start" />
+              Gruppe bearbeiten
+            </IonButton>
+          </IonCardContent>
+        </IonCard>
+
 
             <IonCard>
               <IonCardHeader>
