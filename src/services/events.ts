@@ -18,7 +18,7 @@ export const createEvent = async (
   }
 
   try {
-    // 🔁 Hole die Gruppe
+    // get group to determine next host
     const group = await getGroupById(groupId);
     if (!group || !group.memberIds || group.memberIds.length === 0) {
       throw new Error("Group not found or has no members");
@@ -26,7 +26,7 @@ export const createEvent = async (
 
     const memberIds = group.memberIds;
 
-    // 🔁 Hole die zuletzt erstellten Events dieser Gruppe
+    // get last created event to determine next host
     const result = await FirebaseFirestore.getCollection({
       reference: `${COLLECTIONS.GROUPS}/${groupId}/events`,
       queryConstraints: [
@@ -35,7 +35,7 @@ export const createEvent = async (
       ],
     });
 
-    let nextHost = memberIds[0]; // Standard: erstes Mitglied
+    let nextHost = memberIds[0]; // Standard: first member as host
 
     if (result.snapshots.length > 0) {
       const lastEvent = result.snapshots[0].data as GroupEventDoc;
@@ -45,7 +45,8 @@ export const createEvent = async (
       nextHost = memberIds[nextIndex];
     }
 
-    // 🔐 Event-Daten speichern
+    // store Event with next host
+    console.log("Next host for event:", nextHost);
     const eventData: GroupEventDoc = {
       ...event,
       createdAt: dateToFirestoreTimestamp(new Date()),
@@ -81,8 +82,11 @@ export const getAllEvents = async (): Promise<({ id: string; groupId: string } &
       const eventsRef = `${COLLECTIONS.GROUPS}/${groupId}/events`;
 
       const eventsResult = await FirebaseFirestore.getCollection({
-        reference: eventsRef,
-      });
+      reference: eventsRef,
+      queryConstraints: [
+        { type: "orderBy", fieldPath: "datetime", directionStr: "asc" },
+      ],
+    });
 
       for (const eventDoc of eventsResult.snapshots) {
         allEvents.push({
@@ -263,3 +267,66 @@ export const submitEventRating = async (
     data: { ratings: updatedRatings },
   });
 };
+
+// add new Group user for future events
+
+export const addUserToFutureEvents = async (groupId: string, userId: string): Promise<void> => {
+  try {
+    const result = await FirebaseFirestore.getCollection({
+      reference: `${COLLECTIONS.GROUPS}/${groupId}/events`,
+    });
+    const now = new Date();
+
+    for (const snap of result.snapshots) {
+      const data = snap.data as GroupEventDoc;
+      if (!data?.datetime) continue;
+
+      const when = firestoreTimestampToDate(data.datetime);
+      if (when < now) continue;
+
+      const current = new Set<string>(data.participantIds || []);
+      if (current.has(userId)) continue;
+
+      current.add(userId);
+      await FirebaseFirestore.updateDocument({
+        reference: `${COLLECTIONS.GROUPS}/${groupId}/events/${snap.id}`,
+        data: { participantIds: Array.from(current) },
+      });
+    }
+    console.log("[addUserToFutureEvents] OK", { groupId, userId });
+  } catch (e) {
+    console.error("[addUserToFutureEvents] Fehler:", e);
+    throw e;
+  }
+};
+
+export const removeUserFromFutureEvents = async (
+  groupId: string,
+  userId: string
+): Promise<void> => {
+  const res = await FirebaseFirestore.getCollection({
+    reference: `${COLLECTIONS.GROUPS}/${groupId}/events`,
+  });
+
+  const now = new Date();
+
+  for (const snap of res.snapshots) {
+    const data = snap.data as GroupEventDoc;
+    const eid = snap.id;
+    if (!data?.datetime) continue;
+
+    const when = firestoreTimestampToDate(data.datetime);
+    if (when < now) continue; // nur zukünftige
+
+    const current = new Set<string>(data.participantIds || []);
+    if (!current.has(userId)) continue;
+
+    current.delete(userId);
+
+    await FirebaseFirestore.updateDocument({
+      reference: `${COLLECTIONS.GROUPS}/${groupId}/events/${eid}`,
+      data: { participantIds: Array.from(current) },
+    });
+  }
+};
+
